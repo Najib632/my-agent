@@ -2,30 +2,46 @@ import { tool } from "ai";
 import { simpleGit } from "simple-git";
 import { z } from "zod";
 
-const fileChange = z.object({
-  rootDir: z.string().min(1).describe("The root directory"),
+const diffToolSchema = z.object({
+  directory: z.string().describe("The directory to check for changes."),
+  excludeFiles: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "An array of file names or glob patterns to exclude from the diff.",
+    ),
 });
 
-type FileChange = z.infer<typeof fileChange>;
+type DiffChange = z.infer<typeof diffToolSchema>;
 
-const excludeFiles = ["dist", "bun.lock"];
+async function getDiffInDirectory({
+  directory,
+  excludeFiles = ["dist", "bun.lock"],
+}: DiffChange) {
+  try {
+    const diffArgs = ["HEAD", "--", directory];
 
-async function getFileChangesInDirectory({ rootDir }: FileChange) {
-  const git = simpleGit(rootDir);
-  const summary = await git.diffSummary();
-  const diffs: { file: string; diff: string }[] = [];
+    if (excludeFiles.length > 0) {
+      const excludePatterns = excludeFiles.map(
+        (pattern) => `:(exclude)${pattern}`,
+      );
+      diffArgs.push(...excludePatterns);
+    }
 
-  for (const file of summary.files) {
-    if (excludeFiles.includes(file.file)) continue;
-    const diff = await git.diff(["--", file.file]);
-    diffs.push({ file: file.file, diff });
+    const diff = await simpleGit().diff(diffArgs);
+
+    if (!diff) {
+      return `No uncommitted changes found in '${directory}' `;
+    }
+    return diff;
+  } catch (error: any) {
+    return `Error getting git diff: ${error.message}`;
   }
-
-  return diffs;
 }
 
 export const getFileChangesInDirectoryTool = tool({
-  description: "Gets the code changes made in given directory",
-  inputSchema: fileChange,
-  execute: getFileChangesInDirectory,
+  description:
+    "Get the file changes in a directory, with an option to exclude files.",
+  inputSchema: diffToolSchema,
+  execute: getDiffInDirectory,
 });

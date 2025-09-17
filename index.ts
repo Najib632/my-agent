@@ -1,7 +1,23 @@
 import { stepCountIs, streamText } from "ai";
 import { google } from "@ai-sdk/google";
+import { Command } from "commander";
 import { SYSTEM_PROMPT } from "./prompts";
 import { getFileChangesInDirectoryTool } from "./tools";
+
+const program = new Command();
+program
+  .name("code-review-agent")
+  .description("An AI-powered code review agent.")
+  .version("0.1.0")
+  .requiredOption(
+    "-d, --directory <path>",
+    "The directory to run the code review on",
+  );
+
+program.parse(process.argv);
+
+const options = program.opts();
+const targetDirectory = options.directory;
 
 const codeReviewAgent = async (prompt: string) => {
   const result = streamText({
@@ -19,7 +35,12 @@ const codeReviewAgent = async (prompt: string) => {
   }
 };
 
-// Specify which directory the code review agent should review changes in your prompt
+if (!targetDirectory) {
+  console.error("Please provide a directory path as an argument.");
+  program.help();
+  process.exit(1);
+}
+
 await codeReviewAgent(
-  "Review the code changes in '../my-agent' directory, make your reviews and suggestions file by file",
+  `Review the code changes in '${targetDirectory}' directory, make your reviews and suggestions file by file`,
 );
